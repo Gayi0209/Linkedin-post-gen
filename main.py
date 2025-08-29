@@ -4,7 +4,7 @@ from groq import Groq
 
 # --- App Configuration ---
 st.set_page_config(
-    page_title="TeacherCool AI Post Generator",
+    page_title="AI Post Generator",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -111,6 +111,13 @@ st.markdown("""
         justify-content: center;
         font-weight: 600;
         font-size: 0.9rem;
+    }
+    
+    .suggestion-label {
+        font-size: 0.9rem;
+        color: #667eea;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
     }
     
     .stSelectbox > div > div {
@@ -361,17 +368,92 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- Helper Functions ---
+def get_course_suggestions(post_type, api_key):
+    """Generate course/topic suggestions based on post type"""
+    if not api_key:
+        return []
+    
+    try:
+        client = Groq(api_key=api_key)
+        
+        prompt = f"""
+        Generate 5 specific course/topic suggestions for a "{post_type}" LinkedIn post for SkillSet, an IT and data science online learning platform.
+
+        Return only the course names, one per line, without numbers or bullets. Examples:
+        Advanced Python for Data Science
+        Cloud Security Fundamentals
+        Machine Learning with TensorFlow
+        DevOps with Docker and Kubernetes
+        Data Analytics with Power BI
+
+        Post type: {post_type}
+        """
+        
+        response = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama3-8b-8192",
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        suggestions = [line.strip() for line in response.choices[0].message.content.strip().split('\n') if line.strip()]
+        return suggestions[:5]  # Limit to 5 suggestions
+        
+    except Exception as e:
+        return []
+
+def get_customization_suggestions(post_type, api_key):
+    """Generate customization suggestions based on post type"""
+    if not api_key:
+        return []
+    
+    try:
+        client = Groq(api_key=api_key)
+        
+        prompt = f"""
+        Generate 5 specific customization/instruction suggestions for a "{post_type}" LinkedIn post for SkillSet.
+
+        Return only the instructions, one per line, without numbers or bullets. Examples:
+        Make it engaging for career changers
+        Include industry statistics and trends
+        Focus on practical benefits and outcomes
+        Add a personal success story element
+        Emphasize job market opportunities
+
+        Post type: {post_type}
+        """
+        
+        response = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama3-8b-8192",
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        suggestions = [line.strip() for line in response.choices[0].message.content.strip().split('\n') if line.strip()]
+        return suggestions[:5]  # Limit to 5 suggestions
+        
+    except Exception as e:
+        return []
+
 # --- Initialize Session State ---
 if 'generated_post' not in st.session_state:
     st.session_state.generated_post = ""
 if 'is_generating' not in st.session_state:
     st.session_state.is_generating = False
+if 'course_suggestions' not in st.session_state:
+    st.session_state.course_suggestions = []
+if 'customization_suggestions' not in st.session_state:
+    st.session_state.customization_suggestions = []
+if 'suggestions_generated_for' not in st.session_state:
+    st.session_state.suggestions_generated_for = ""
 
 # --- Hero Section ---
 st.markdown("""
 <div class="hero-section">
     <div class="feature-badge">✨ Powered by Advanced AI</div>
-    <h1 class="hero-title">TeacherCool AI</h1>
+    <h1 class="hero-title">AI Post Generator</h1>
     <p class="hero-subtitle">Create compelling LinkedIn posts that engage your audience and grow your online presence</p>
 </div>
 """, unsafe_allow_html=True)
@@ -408,15 +490,45 @@ with col1:
         help="Choose the type of LinkedIn post you want to create"
     )
     
+    # Generate suggestions when post type changes
+    if st.session_state.suggestions_generated_for != post_type and groq_api_key:
+        with st.spinner("Loading suggestions..."):
+            st.session_state.course_suggestions = get_course_suggestions(post_type, groq_api_key)
+            st.session_state.customization_suggestions = get_customization_suggestions(post_type, groq_api_key)
+            st.session_state.suggestions_generated_for = post_type
+    
     st.markdown("<br>", unsafe_allow_html=True)
     
     # Step 2
     st.markdown('<div class="section-title"><span class="step-number">2</span>Course/Topic Details</div>', unsafe_allow_html=True)
+    
+    # Course suggestions dropdown
+    if st.session_state.course_suggestions and groq_api_key:
+        st.markdown('<div class="suggestion-label">💡 Quick Suggestions:</div>', unsafe_allow_html=True)
+        course_suggestion = st.selectbox(
+            "Course Suggestions",
+            ["Type your own..."] + st.session_state.course_suggestions,
+            label_visibility="collapsed",
+            key="course_suggestion_box",
+            help="Select a suggestion or choose 'Type your own...' to write custom text"
+        )
+        
+        # Set default value based on suggestion
+        if course_suggestion != "Type your own...":
+            default_course_value = course_suggestion
+        else:
+            default_course_value = ""
+    else:
+        default_course_value = ""
+        course_suggestion = "Type your own..."
+    
     course_topic_name = st.text_input(
         "Course/Topic Name",
+        value=default_course_value,
         placeholder="e.g., Advanced Python for Data Science, Cloud Security Fundamentals",
         label_visibility="collapsed",
-        help="Enter the main topic or course name for your post"
+        help="Enter the main topic or course name for your post",
+        key="course_input"
     )
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -441,12 +553,35 @@ with col1:
     
     # Step 4
     st.markdown('<div class="section-title"><span class="step-number">4</span>Customization (Optional)</div>', unsafe_allow_html=True)
+    
+    # Customization suggestions dropdown
+    if st.session_state.customization_suggestions and groq_api_key:
+        st.markdown('<div class="suggestion-label">💡 Customization Ideas:</div>', unsafe_allow_html=True)
+        customization_suggestion = st.selectbox(
+            "Customization Suggestions",
+            ["Type your own..."] + st.session_state.customization_suggestions,
+            label_visibility="collapsed",
+            key="customization_suggestion_box",
+            help="Select a suggestion or choose 'Type your own...' to write custom instructions"
+        )
+        
+        # Set default value based on suggestion
+        if customization_suggestion != "Type your own...":
+            default_custom_value = customization_suggestion
+        else:
+            default_custom_value = ""
+    else:
+        default_custom_value = ""
+        customization_suggestion = "Type your own..."
+    
     specific_instructions = st.text_area(
         "Additional Instructions",
+        value=default_custom_value,
         placeholder="e.g., Make it engaging for career changers, include statistics, focus on practical benefits",
         label_visibility="collapsed",
         height=100,
-        help="Add any specific requirements or tone preferences"
+        help="Add any specific requirements or tone preferences",
+        key="custom_input"
     )
     
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -462,6 +597,7 @@ with col1:
             st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
+
 with col2:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">📝 Generated LinkedIn Post</div>', unsafe_allow_html=True)
@@ -480,7 +616,7 @@ with col2:
             client = Groq(api_key=groq_api_key)
 
             prompt = f"""
-            Generate an exceptional LinkedIn post for TeacherCool, a premium online learning platform specializing in IT and data science education.
+            Generate an exceptional LinkedIn post for SkillSet, a premium online learning platform specializing in IT and data science education.
 
             **Post Type:** {post_type}
             **Course/Topic:** {course_topic_name}
@@ -494,10 +630,10 @@ with col2:
             - Has clear value proposition for the reader
             - Contains social proof or statistics when relevant
             - Ends with a strong call-to-action
-            - Includes 3-5 strategic hashtags from: #elearning #ITskills #DataScience #Cybersecurity #AI #MachineLearning #CloudComputing #CareerDevelopment #TechEducation #OnlineLearning #TeacherCool #SkillUp #FutureOfWork #DigitalTransformation #TechCareer
+            - Includes 3-5 strategic hashtags from: #elearning #ITskills #DataScience #Cybersecurity #AI #MachineLearning #CloudComputing #CareerDevelopment #TechEducation #OnlineLearning #SkillSet #SkillUp #FutureOfWork #DigitalTransformation #TechCareer
 
             Important:
-            - Do NOT include any introduction text like "Here’s a post" or "As requested".
+            - Do NOT include any introduction text like "Here's a post" or "As requested".
             - The output should ONLY be the final LinkedIn post text.
             - Format the response exactly as a LinkedIn post that can be copied and pasted directly.
             """
@@ -523,7 +659,6 @@ with col2:
         if st.button("📋 Copy to Clipboard", key="copy_btn"):
             st.success("✅ Post copied! Ready to share on LinkedIn")
 
-
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("🔄 Generate Another", key="regenerate"):
@@ -545,7 +680,6 @@ with col2:
         """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
-
 
 # --- Info Card ---
 st.markdown("""
