@@ -1,5 +1,5 @@
 import streamlit as st
-from groq import Groq
+import google.generativeai as genai
 
 
 # --- App Configuration ---
@@ -9,9 +9,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- CSS ---
+# --- CSS (No changes here, remains the same) ---
 st.markdown("""
 <style>
+    /* Your existing CSS goes here */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
     * {
@@ -368,14 +369,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Helper Functions ---
+
+# --- Helper Functions (Updated for Gemini) ---
 def get_course_suggestions(post_type, api_key):
-    """Generate course/topic suggestions based on post type"""
+    """Generate course/topic suggestions based on post type using Gemini"""
     if not api_key:
         return []
     
     try:
-        client = Groq(api_key=api_key)
+        genai.configure(api_key=api_key)
         
         prompt = f"""
         Generate 5 specific course/topic suggestions for a "{post_type}" LinkedIn post for SkillSet, an IT and data science online learning platform.
@@ -389,27 +391,25 @@ def get_course_suggestions(post_type, api_key):
 
         Post type: {post_type}
         """
+
+        # Gemini model and generation config
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
         
-        response = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama3-8b-8192",
-            temperature=0.7,
-            max_tokens=200
-        )
-        
-        suggestions = [line.strip() for line in response.choices[0].message.content.strip().split('\n') if line.strip()]
+        suggestions = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
         return suggestions[:5]  # Limit to 5 suggestions
         
     except Exception as e:
+        # st.error(f"Error generating suggestions: {e}") # Optional: for debugging
         return []
 
 def get_customization_suggestions(post_type, api_key):
-    """Generate customization suggestions based on post type"""
+    """Generate customization suggestions based on post type using Gemini"""
     if not api_key:
         return []
     
     try:
-        client = Groq(api_key=api_key)
+        genai.configure(api_key=api_key)
         
         prompt = f"""
         Generate 5 specific customization/instruction suggestions for a "{post_type}" LinkedIn post for SkillSet.
@@ -424,17 +424,15 @@ def get_customization_suggestions(post_type, api_key):
         Post type: {post_type}
         """
         
-        response = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama3-8b-8192",
-            temperature=0.7,
-            max_tokens=200
-        )
+        # Gemini model and generation config
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
         
-        suggestions = [line.strip() for line in response.choices[0].message.content.strip().split('\n') if line.strip()]
+        suggestions = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
         return suggestions[:5]  # Limit to 5 suggestions
         
     except Exception as e:
+        # st.error(f"Error generating suggestions: {e}") # Optional: for debugging
         return []
 
 # --- Initialize Session State ---
@@ -458,19 +456,20 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- API Key Section ---
+# --- API Key Section (Updated for Gemini) ---
 st.markdown('<div class="api-key-section">', unsafe_allow_html=True)
 st.markdown('<div class="api-key-title">🔑 API Configuration</div>', unsafe_allow_html=True)
 
-groq_api_key = st.text_input(
-    "Enter your Groq API Key", 
+# Changed from groq_api_key to gemini_api_key
+gemini_api_key = st.text_input(
+    "Enter your Google AI Studio API Key", 
     type="password", 
-    placeholder="gsk_...",
-    help="Get your free API key from https://console.groq.com/keys",
+    placeholder="Enter your Gemini API Key here...",
+    help="Get your free API key from Google AI Studio",
     label_visibility="collapsed"
 )
 
-if groq_api_key:
+if gemini_api_key:
     st.markdown('<div class="success-message">✅ API Key configured successfully!</div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
@@ -491,10 +490,10 @@ with col1:
     )
     
     # Generate suggestions when post type changes
-    if st.session_state.suggestions_generated_for != post_type and groq_api_key:
+    if st.session_state.suggestions_generated_for != post_type and gemini_api_key:
         with st.spinner("Loading suggestions..."):
-            st.session_state.course_suggestions = get_course_suggestions(post_type, groq_api_key)
-            st.session_state.customization_suggestions = get_customization_suggestions(post_type, groq_api_key)
+            st.session_state.course_suggestions = get_course_suggestions(post_type, gemini_api_key)
+            st.session_state.customization_suggestions = get_customization_suggestions(post_type, gemini_api_key)
             st.session_state.suggestions_generated_for = post_type
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -503,7 +502,7 @@ with col1:
     st.markdown('<div class="section-title"><span class="step-number">2</span>Course/Topic Details</div>', unsafe_allow_html=True)
     
     # Course suggestions dropdown
-    if st.session_state.course_suggestions and groq_api_key:
+    if st.session_state.course_suggestions and gemini_api_key:
         st.markdown('<div class="suggestion-label">💡 Quick Suggestions:</div>', unsafe_allow_html=True)
         course_suggestion = st.selectbox(
             "Course Suggestions",
@@ -513,7 +512,6 @@ with col1:
             help="Select a suggestion or choose 'Type your own...' to write custom text"
         )
         
-        # Set default value based on suggestion
         if course_suggestion != "Type your own...":
             default_course_value = course_suggestion
         else:
@@ -555,7 +553,7 @@ with col1:
     st.markdown('<div class="section-title"><span class="step-number">4</span>Customization (Optional)</div>', unsafe_allow_html=True)
     
     # Customization suggestions dropdown
-    if st.session_state.customization_suggestions and groq_api_key:
+    if st.session_state.customization_suggestions and gemini_api_key:
         st.markdown('<div class="suggestion-label">💡 Customization Ideas:</div>', unsafe_allow_html=True)
         customization_suggestion = st.selectbox(
             "Customization Suggestions",
@@ -565,7 +563,6 @@ with col1:
             help="Select a suggestion or choose 'Type your own...' to write custom instructions"
         )
         
-        # Set default value based on suggestion
         if customization_suggestion != "Type your own...":
             default_custom_value = customization_suggestion
         else:
@@ -588,8 +585,8 @@ with col1:
     
     # Generate Button
     if st.button("🚀 Generate LinkedIn Post", key="generate_btn"):
-        if not groq_api_key:
-            st.markdown('<div class="error-message">❌ Please enter your Groq API Key above</div>', unsafe_allow_html=True)
+        if not gemini_api_key:
+            st.markdown('<div class="error-message">❌ Please enter your Google AI Studio API Key above</div>', unsafe_allow_html=True)
         elif not course_topic_name:
             st.markdown('<div class="error-message">❌ Please provide a course or topic name</div>', unsafe_allow_html=True)
         else:
@@ -602,7 +599,7 @@ with col2:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">📝 Generated LinkedIn Post</div>', unsafe_allow_html=True)
 
-    # Output Logic
+    # Output Logic (Updated for Gemini)
     if st.session_state.is_generating:
         st.markdown("""
         <div class="loading-animation">
@@ -613,7 +610,8 @@ with col2:
         """, unsafe_allow_html=True)
 
         try:
-            client = Groq(api_key=groq_api_key)
+            # Configure the Gemini client
+            genai.configure(api_key=gemini_api_key)
 
             prompt = f"""
             Generate an exceptional LinkedIn post for SkillSet, a premium online learning platform specializing in IT and data science education.
@@ -637,15 +635,23 @@ with col2:
             - The output should ONLY be the final LinkedIn post text.
             - Format the response exactly as a LinkedIn post that can be copied and pasted directly.
             """
-
-            chat_completion = client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="llama3-8b-8192",
-                temperature=0.7,
-                max_tokens=1024
+            
+            # --- Gemini API Call ---
+            generation_config = {
+                "temperature": 0.7,
+                # "max_output_tokens": 1024, # max_tokens equivalent
+            }
+            
+            model = genai.GenerativeModel(
+                model_name='gemini-1.5-flash',
+                generation_config=generation_config
             )
+            
+            response = model.generate_content(prompt)
+            # --- End of Gemini API Call ---
 
-            st.session_state.generated_post = chat_completion.choices[0].message.content
+            # Accessing the response text is simpler
+            st.session_state.generated_post = response.text
             st.session_state.is_generating = False
             st.rerun()
 
@@ -670,7 +676,6 @@ with col2:
                 st.rerun()
 
     else:
-        # ✅ Compact placeholder (no giant empty box anymore)
         st.markdown("""
         <div style="text-align:center; color:#94a3b8; font-size:1rem; padding:2rem;">
             <div style="font-size:2rem; margin-bottom:0.5rem;">✨</div>
